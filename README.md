@@ -1,4 +1,4 @@
-# Final-Data-Analysis
+# Final Data Analysis
 An Analysis of the Voting Behaviour of the United Kingdom’s General Elections in 2010
 
 This paper represents my final deliverable for the class “Statistics I” with Prof Kayser at the Hertie School.
