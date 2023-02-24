@@ -1,1 +1,254 @@
+### install packages
+install.packages("car")
+install.packages("stargazer") 
+install.packages("corrplot")
+install.packages("ggplot2") 
+install.packages("cowplot")
+install.packages("outliers")
+install.packages("relaimpo")
+install.packages("carData")
+install.packages("Rtools")
+install.packages("ggpubr")
+install.packages("sm")
+install.packages("interactions")
+library(mitools)
+library(sm)
+library(ggpubr)
+library(carData)
+library(relaimpo)
+library(stargazer)
+library(corrplot)
+library(cowplot)
+library(ggplot2)
+library(car)
+library(magrittr)
+library(foreign)
+library(outliers)
+library(interactions)
 
+### set wokring directory and load data
+getwd()
+ToryVote_final_da <- read.dta("ToryVote_final_da.dta")
+
+### explore the data
+summary(ToryVote_final_da)
+head(ToryVote_final_da$con_like)
+length(ToryVote_final_da$idno)
+head(ToryVote_final_da$rile)
+
+### remove NA's of the dependent and main independent variable
+Tory <- ToryVote_final_da[!is.na(ToryVote_final_da$con_like)& !is.na(ToryVote_final_da$rile),]
+
+### explore Tory dataset
+head(Tory$con_like)
+head(Tory$rile)
+summary(Tory)
+# NA's left in age (10), gender (3), income (122), att_eu (10)
+
+str(Tory$con_like)
+summary(Tory$con_like)
+# con_like = Likelyhood Tory vote = numeric from 0 to 10
+
+str(Tory$rile)
+summary(Tory$rile)
+# rile = right-left self-placement = numeric from 0 to 10
+# Mistake: why is 11 the highest value?
+
+str(Tory$scot)
+summary(Tory$scot)
+# scot = Region Scotland = dummy variable, 1 = Scotland
+
+str(Tory$age)
+summary(Tory$age)
+# age = numeric, 10 NA's!
+
+str(Tory$female)
+summary(Tory$female)
+# female = gender = dummy variable, 1 = female,  3 NA's!
+
+str(Tory$educ)
+summary(Tory$educ)
+# educ = years of education education = numeric
+
+str(Tory$religion)
+summary(Tory$religion)
+# religion = dummy variable, 1 = yes
+
+str(Tory$income)
+summary(Tory$income)
+# income = annual household income = numeric, 122 NA's!
+
+str(Tory$att_eu)
+summary(Tory$att_eu)
+#att_eu = attitude towards  EU = categorical (1-5), 10 NA's!
+
+### decided to get rid of all the NA's in the dataset
+cleanT <- ToryVote_final_da[!is.na(ToryVote_final_da$con_like) & !is.na(ToryVote_final_da$rile) & 
+                 !is.na(ToryVote_final_da$age) & !is.na(ToryVote_final_da$female) &
+                 !is.na(ToryVote_final_da$income) & !is.na(ToryVote_final_da$att_eu),]
+summary(cleanT)
+# Actual data without NA's but less observations
+
+### running the frist regression
+m1 <- lm(con_like ~ rile + age + female + income, cleanT)
+summary(m1)
+?calc.relimp
+calc.relimp(m1, type = "lmg", rela = TRUE, rank = TRUE)
+
+### comparing to other models
+d1 <- lm(con_like ~ rile + age + female + income + religion + educ, cleanT)
+summary(d1)
+# what if i include all variables?
+d2 <- lm(con_like ~ rile, cleanT)
+summary(d2)
+# bivariate regression model with con_like and rile?
+
+### OUTPUT Main Regression Model
+stargazer(m1, type= "text", out="reg.out")
+
+### control for Outliers
+avPlot(m1, variable = "rile", id=T)
+outlierTest(m1)
+dfbetasPlots(m1, terms=~rile, id.n = 5)
+
+### additional diagnostics
+cooksd <- cooks.distance(m1)
+plot(cooksd, pch=".", cex=2)
+abline(h = 4*mean(cooksd, na.rm=T), col="blue")  
+text(x=1:length(cooksd)+1, y=cooksd, 
+labels=ifelse(cooksd>4*mean(cooksd, na.rm=T),names(cooksd),""), col="blue")
+
+### control for Multicollinearity (VIF and Tolerance)
+vif(m1)
+sqrt(vif(m1))
+1/vif(m1)
+
+### EU
+summary(cleanT$att_eu)
+str(cleanT$att_eu)
+m2 <- lm(con_like ~ rile + age + female + income + att_eu, cleanT)
+summary(m2)
+
+### OUTPUT in Main Regression Model
+stargazer(m1, m2, type= "text", out="reg.out")
+contrasts(cleanT$att_eu)
+
+### NOTE TO TA
+### before I loaded the data differently and therefore att_eu was already a numeric variable
+### with the folowwing code I trasnformed the variable in a factor
+m2.1 <- lm(con_like ~ rile + age + female + income + factor(att_eu), cleanT)
+### Accordingly question number 4 made no sense for which reasons I spent hours on it
+### After talking to my TA i went all the way back just to load the dataset differently or "correctly"
+### This allowed me to answer Question 4
+### Next time: please communicate how students are expected to load the data. Thank you!
+
+### Transform ordinal into interval, run regression and display the model
+cleanT$att_eu_int <- NA
+summary(cleanT$att_eu_int)
+str(cleanT$att_eu_int)
+cleanT$att_eu_int[cleanT$att_eu == "strongly disapprove"] <- 1
+cleanT$att_eu_int[cleanT$att_eu == "disapprove"] <- 2
+cleanT$att_eu_int[cleanT$att_eu == "neither nor"] <- 3
+cleanT$att_eu_int[cleanT$att_eu == "approve"] <- 4
+cleanT$att_eu_int[cleanT$att_eu == "strongly approve"] <- 5
+summary(cleanT$att_eu_int)
+str(cleanT$att_eu_int)
+summary(cleanT)
+m3 <- lm(con_like ~ rile + age + female + income + att_eu_int, cleanT)
+summary(m3)
+### OOUTPUT difference between factor and numeric data of attitude towards the EU
+stargazer(m1, m2, m3, type= "text", out="reg.out")
+
+### Effect of dummy Scotland
+str(cleanT$scot)
+summary(cleanT$scot)
+table(cleanT$scot)
+m4 <- lm(con_like ~ factor(scot), cleanT)
+
+summary(m4)
+stargazer(m4, type= "text", out="reg.out")
+
+T0 <- cleanT
+T0$scot[cleanT$scot == 1] <- "Scotland"
+T0$scot[cleanT$scot == 0] <- "UK"
+T0$scot <- as.factor(T0$scot)
+
+### boxplot
+?boxplot
+boxplot(con_like~scot, data=T0,
+        main="Regional Differences ever voting for the Tories",
+        xlab="Likelihood ever voting for the Conservative party",
+        ylab="Region",
+        col="grey", border="black", horizontal = TRUE)
+
+### difference of means
+#1
+summary(T0$con_like[T0$scot== "UK"])
+sd(T0$con_like[T0$scot== "UK"])
+length(T0$con_like[T0$scot== "UK"])
+summary(T0$con_like[T0$scot== "Scotland"])
+sd(T0$con_like[T0$scot== "Scotland"])
+length(T0$con_like[T0$scot== "Scotland"])
+(5.197-4.267)/sqrt((3.785054*3.785054/477)+3.911243*3.911243/101)#=2.182964
+#2
+t.test(x = T0$con_like[T0$scot== "UK"], y = T0$con_like[T0$scot== "Scotland"],
+       alternative = "two.sided", var.equal = FALSE)
+#3
+diff <- mean(T0$con_like[T0$scot== "UK"]) - mean(T0$con_like[T0$scot== "Scotland"])
+se <- sqrt(var(T0$con_like[T0$scot== "UK"])/length(T0$con_like[T0$scot== "UK"]) +
+             var(T0$con_like[T0$scot== "Scotland"])/length(T0$con_like[T0$scot== "Scotland"]))
+tstat <- diff/se
+tstat
+
+### Standard errors
+Standard_Error_UK <- sd(T0$con_like[T0$scot== "UK"])/
+  sqrt(length(T0$con_like[T0$scot== "UK"]))
+Standard_Error_Scotland <- sd(T0$con_like[T0$scot== "Scotland"])/
+  sqrt(length(T0$con_like[T0$scot== "Scotland"]))
+### or
+sqrt(var(T0$con_like[T0$scot== "UK"])/length(T0$con_like[T0$scot== "UK"]))
+sqrt(var(T0$con_like[T0$scot== "Scotland"])/length(T0$con_like[T0$scot== "Scotland"]))
+
+### Density Plot
+?densityPlot
+densityPlot(T0$con_like ~ T0$scot, method = "adaptive", from=0, to=10, bw=1,
+            lty=c(1,1), grid = FALSE, rug = FALSE, legend = list(location = "top", 
+            title = "Region"), col = c("red", "black"), xlab= "Likelyhood Tory Vote", 
+            ylab = "Density", lwd=1, normalize = TRUE, main = "Regional Differences")
+
+### Interaction
+m5 <- lm(con_like ~ rile + factor(scot) + rile * factor(scot), cleanT)
+summary(m5)
+stargazer(m1, m2, m3, m4, m5, type= "text", out="reg.out")
+
+### Final model
+m6 <- lm(con_like ~ rile + age + female + income + att_eu + factor(scot) + rile*factor(scot), cleanT)
+summary(m6)
+stargazer(m1, m2, m3, m4, m5, m6, type= "text", out="reg.out")
+stargazer(m6, type= "text", out="reg.out")
+
+### Test
+summary(Test)
+Test$att_eu1 <- ifelse(Test$att_eu== 1, 1, 0)
+Test$att_eu2 <- ifelse(Test$att_eu== 2, 1, 0)
+Test$att_eu3 <- ifelse(Test$att_eu== 3, 1, 0)
+Test$att_eu4 <- ifelse(Test$att_eu== 4, 1, 0)
+Test$att_eu5 <- ifelse(Test$att_eu== 5, 1, 0)
+table(Test$att_eu)
+table(Test$att_eu1)
+table(Test$att_eu2)
+table(Test$att_eu3)
+table(Test$att_eu4)
+table(Test$att_eu5)
+t0 <- lm(con_like ~ rile + age + female + income + att_eu1 + att_eu2 + att_eu3 + att_eu4 + att_eu5, Test)
+summary(t0)
+t1 <- lm(con_like ~ rile + age + female + income + att_eu1, Test)
+summary(t1)
+t2 <- lm(con_like ~ rile + age + female + income + att_eu2, Test)
+summary(t2)
+t3 <- lm(con_like ~ rile + age + female + income + att_eu3, Test)
+summary(t3)
+t4<- lm(con_like ~ rile + age + female + income + att_eu4, Test)
+summary(t4)
+t5 <- lm(con_like ~ rile + age + female + income + att_eu5, Test)
+summary(t5)
